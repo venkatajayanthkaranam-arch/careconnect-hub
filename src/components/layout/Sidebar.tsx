@@ -1,11 +1,11 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import type { UserRole } from '@/types/hospital';
+import type { EmployeeRole } from '@/types/hospital';
 import { 
   LayoutDashboard, 
   Users, 
   Calendar, 
-  Stethoscope, 
+  Stethoscope,
   FlaskConical, 
   Pill, 
   Bed, 
@@ -28,7 +28,7 @@ interface MenuItem {
   path: string;
 }
 
-const menusByRole: Record<UserRole, MenuItem[]> = {
+const menusByRole: Record<EmployeeRole, MenuItem[]> = {
   admin: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
     { icon: Users, label: 'User Management', path: 'users' },
@@ -89,8 +89,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
 
   const menuItems = menusByRole[user.role] || [];
 
-  const getRoleLabel = (role: UserRole): string => {
-    const labels: Record<UserRole, string> = {
+  const getRoleLabel = (role: EmployeeRole): string => {
+    const labels: Record<EmployeeRole, string> = {
       admin: 'Administrator',
       reception: 'Reception',
       doctor: 'Doctor',
@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sidebar-foreground font-medium text-sm truncate">{user.name}</p>
-            <p className="text-sidebar-foreground/60 text-xs">{getRoleLabel(user.role)}</p>
+            <p className="text-sidebar-foreground/60 text-xs">{user.role !== 'patient' ? getRoleLabel(user.role) : 'Patient'}</p>
           </div>
         </div>
       </div>
