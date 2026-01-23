@@ -9,17 +9,27 @@ import { NurseDashboard } from '@/components/dashboards/NurseDashboard';
 import { LabDashboard } from '@/components/dashboards/LabDashboard';
 import { PharmacyDashboard } from '@/components/dashboards/PharmacyDashboard';
 import { BillingDashboard } from '@/components/dashboards/BillingDashboard';
+import { PatientDashboard } from '@/components/dashboards/PatientDashboard';
 import { IPManagement } from '@/components/modules/IPManagement';
-import type { UserRole } from '@/types/hospital';
 
 const DashboardRouter: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isPatient } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
 
   if (!isAuthenticated || !user) {
     return <LoginPage onLoginSuccess={() => {}} />;
   }
 
+  // Patient users get their own simplified layout
+  if (isPatient) {
+    return (
+      <DashboardLayout currentPage={currentPage} onNavigate={setCurrentPage}>
+        <PatientDashboard />
+      </DashboardLayout>
+    );
+  }
+
+  // Employee dashboards
   const renderDashboard = () => {
     switch (user.role) {
       case 'admin':
