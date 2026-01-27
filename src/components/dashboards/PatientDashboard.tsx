@@ -14,20 +14,22 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import type { PatientUser, Appointment, Bill } from '@/types/hospital';
+import type { Appointment, Bill } from '@/types/hospital';
 import { AppointmentBooking } from '@/components/patient/AppointmentBooking';
 
 export const PatientDashboard: React.FC = () => {
-  const { user } = useAuth();
-  const patientUser = user as PatientUser;
+  const { patientRecord, profile } = useAuth();
   const [showBooking, setShowBooking] = useState(false);
+
+  const patientId = patientRecord?.id || '';
+  const patientName = profile?.name || patientRecord?.name || 'Patient';
 
   // Filter appointments and bills for this patient
   const myAppointments = mockAppointments.filter(
-    a => a.patientId === patientUser.patientId
+    a => a.patientId === patientId
   );
   const myBills = mockBills.filter(
-    b => b.patientId === patientUser.patientId
+    b => b.patientId === patientId
   );
 
   const upcomingAppointments = myAppointments.filter(
@@ -92,14 +94,14 @@ export const PatientDashboard: React.FC = () => {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
-              Welcome, {patientUser.name}!
+              Welcome, {patientName}!
             </h1>
             <p className="text-muted-foreground mt-1">
               Manage your appointments and health records
             </p>
             <div className="flex items-center gap-2 mt-3 text-sm">
               <span className="bg-primary/20 text-primary px-3 py-1 rounded-full font-medium">
-                Patient ID: {patientUser.patientId}
+                Patient ID: {patientId}
               </span>
             </div>
           </div>

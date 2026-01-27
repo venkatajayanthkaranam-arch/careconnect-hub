@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import type { EmployeeRole } from '@/types/hospital';
+import type { Database } from '@/integrations/supabase/types';
 import { 
   LayoutDashboard, 
   Users, 
@@ -22,13 +22,15 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+type EmployeeRole = Database['public']['Enums']['employee_role'];
+
 interface MenuItem {
   icon: React.ElementType;
   label: string;
   path: string;
 }
 
-const menusByRole: Record<EmployeeRole, MenuItem[]> = {
+const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
   admin: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
     { icon: Users, label: 'User Management', path: 'users' },
@@ -75,6 +77,13 @@ const menusByRole: Record<EmployeeRole, MenuItem[]> = {
     { icon: FileText, label: 'Insurance', path: 'insurance' },
     { icon: ClipboardList, label: 'Discharge', path: 'discharge' },
   ],
+  patient: [
+    { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
+    { icon: Calendar, label: 'Appointments', path: 'appointments' },
+    { icon: FlaskConical, label: 'Lab Results', path: 'lab-results' },
+    { icon: CreditCard, label: 'Bills', path: 'bills' },
+    { icon: FileText, label: 'Medical Records', path: 'records' },
+  ],
 };
 
 interface SidebarProps {
@@ -83,11 +92,14 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => {
-  const { user, logout } = useAuth();
+  const { profile, employeeRole, isPatient, patientRecord, logout } = useAuth();
 
-  if (!user) return null;
+  const displayName = profile?.name || patientRecord?.name || 'User';
+  const userRole = isPatient ? 'patient' : employeeRole;
 
-  const menuItems = menusByRole[user.role] || [];
+  if (!userRole) return null;
+
+  const menuItems = menusByRole[userRole] || [];
 
   const getRoleLabel = (role: EmployeeRole): string => {
     const labels: Record<EmployeeRole, string> = {
@@ -122,12 +134,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-sidebar-accent flex items-center justify-center">
             <span className="text-sidebar-primary font-semibold text-sm">
-              {user.name.split(' ').map(n => n[0]).join('')}
+              {displayName.split(' ').map(n => n[0]).join('').slice(0, 2)}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sidebar-foreground font-medium text-sm truncate">{user.name}</p>
-            <p className="text-sidebar-foreground/60 text-xs">{user.role !== 'patient' ? getRoleLabel(user.role) : 'Patient'}</p>
+            <p className="text-sidebar-foreground font-medium text-sm truncate">{displayName}</p>
+            <p className="text-sidebar-foreground/60 text-xs">
+              {isPatient ? 'Patient' : employeeRole ? getRoleLabel(employeeRole) : 'User'}
+            </p>
           </div>
         </div>
       </div>

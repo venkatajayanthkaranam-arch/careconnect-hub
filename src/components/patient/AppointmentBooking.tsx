@@ -33,8 +33,7 @@ import {
 import type { 
   Department, 
   SeverityLevel, 
-  RiskLevel, 
-  PatientUser,
+  RiskLevel,
   Doctor
 } from '@/types/hospital';
 import { symptomDepartmentMap } from '@/types/hospital';
@@ -47,8 +46,7 @@ interface AppointmentBookingProps {
 type BookingStep = 'symptoms' | 'doctor' | 'schedule' | 'confirm';
 
 export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBack }) => {
-  const { user } = useAuth();
-  const patientUser = user as PatientUser;
+  const { patientRecord } = useAuth();
   
   const [currentStep, setCurrentStep] = useState<BookingStep>('symptoms');
   
@@ -486,11 +484,11 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBack }
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Patient</p>
-                  <p className="font-medium">{patientUser.name}</p>
+                  <p className="font-medium">{patientRecord?.name || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Patient ID</p>
-                  <p className="font-medium">{patientUser.patientId}</p>
+                  <p className="font-medium">{patientRecord?.id || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Doctor</p>
