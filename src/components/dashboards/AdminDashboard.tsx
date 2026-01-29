@@ -4,7 +4,7 @@ import { AlertBanner } from '@/components/shared/AlertBanner';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EmployeeManagement } from '@/components/admin/EmployeeManagement';
-import { mockDashboardStats, mockAlerts, mockAppointments, mockBeds } from '@/data/mockData';
+import { useDashboardStats, useAlerts, useTodayAppointments, useBeds } from '@/hooks/useDashboardData';
 import { 
   Users, 
   Calendar, 
@@ -20,7 +20,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Appointment } from '@/types/hospital';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { AppointmentWithDetails } from '@/hooks/useDashboardData';
+import type { Database } from '@/integrations/supabase/types';
+
+type Alert = Database['public']['Tables']['alerts']['Row'];
 
 interface AdminDashboardProps {
   onNavigate: (page: string) => void;
@@ -28,26 +32,44 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const stats = mockDashboardStats;
-  const alerts = mockAlerts;
   
-  const upcomingAppointments = mockAppointments.slice(0, 5);
-  const bedStats = {
-    total: mockBeds.length,
-    available: mockBeds.filter(b => b.status === 'available').length,
-    occupied: mockBeds.filter(b => b.status === 'occupied').length,
-  };
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: alerts = [], isLoading: alertsLoading } = useAlerts();
+  const { data: appointments = [], isLoading: appointmentsLoading } = useTodayAppointments();
+  const { data: beds = [], isLoading: bedsLoading } = useBeds();
+
+  const isLoading = statsLoading || alertsLoading || appointmentsLoading || bedsLoading;
+
+  const upcomingAppointments = appointments.slice(0, 5);
 
   const appointmentColumns = [
-    { key: 'patientName', header: 'Patient' },
-    { key: 'doctorName', header: 'Doctor' },
-    { key: 'time', header: 'Time' },
+    { 
+      key: 'patientName', 
+      header: 'Patient',
+      render: (item: AppointmentWithDetails) => item.patients?.name || 'Unknown'
+    },
+    { 
+      key: 'doctorName', 
+      header: 'Doctor',
+      render: (item: AppointmentWithDetails) => item.doctors?.name || 'Not Assigned'
+    },
+    { key: 'appointment_time', header: 'Time' },
     { 
       key: 'status', 
       header: 'Status',
-      render: (item: Appointment) => <StatusBadge status={item.status} />
+      render: (item: AppointmentWithDetails) => <StatusBadge status={item.status} />
     },
   ];
+
+  // Transform alerts to match AlertBanner expected format
+  const formattedAlerts = alerts.map(alert => ({
+    id: alert.id,
+    type: alert.type,
+    message: alert.message,
+    severity: alert.severity,
+    createdAt: new Date(alert.created_at),
+    acknowledged: alert.acknowledged || false,
+  }));
 
   return (
     <div className="space-y-6 animate-slide-up">
@@ -78,62 +100,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             <p className="text-muted-foreground">Overview of hospital operations</p>
           </div>
 
-          <AlertBanner alerts={alerts} />
+          <AlertBanner alerts={formattedAlerts} />
 
           {/* Main Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              title="Total Patients"
-              value={stats.totalPatients.toLocaleString()}
-              icon={Users}
-              variant="medical"
-              trend={{ value: 12, isPositive: true }}
-            />
-            <StatCard
-              title="Today's Appointments"
-              value={stats.todayAppointments}
-              icon={Calendar}
-              trend={{ value: 8, isPositive: true }}
-            />
-            <StatCard
-              title="Bed Occupancy"
-              value={`${stats.bedOccupancy}%`}
-              icon={Bed}
-              subtitle={`${bedStats.available} beds available`}
-            />
-            <StatCard
-              title="ICU Utilization"
-              value={`${stats.icuUtilization}%`}
-              icon={Activity}
-              variant="warning"
-              subtitle="1 bed available"
-            />
+            {isLoading ? (
+              [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+            ) : (
+              <>
+                <StatCard
+                  title="Total Patients"
+                  value={(stats?.totalPatients || 0).toLocaleString()}
+                  icon={Users}
+                  variant="medical"
+                  trend={{ value: 12, isPositive: true }}
+                />
+                <StatCard
+                  title="Today's Appointments"
+                  value={stats?.todayAppointments || 0}
+                  icon={Calendar}
+                  trend={{ value: 8, isPositive: true }}
+                />
+                <StatCard
+                  title="Bed Occupancy"
+                  value={`${stats?.bedOccupancy || 0}%`}
+                  icon={Bed}
+                  subtitle={`${stats?.availableBeds || 0} beds available`}
+                />
+                <StatCard
+                  title="ICU Utilization"
+                  value={`${stats?.icuUtilization || 0}%`}
+                  icon={Activity}
+                  variant="warning"
+                  subtitle={`${stats?.availableIcuBeds || 0} ICU beds available`}
+                />
+              </>
+            )}
           </div>
 
           {/* Secondary Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <StatCard
-              title="Emergency Load"
-              value={stats.emergencyLoad}
-              icon={AlertTriangle}
-              variant="critical"
-            />
-            <StatCard
-              title="Pending Lab Tests"
-              value={stats.pendingLabTests}
-              icon={FlaskConical}
-            />
-            <StatCard
-              title="Low Stock Items"
-              value={stats.lowStockMedicines}
-              icon={Package}
-              variant="warning"
-            />
-            <StatCard
-              title="Pending Bills"
-              value={stats.pendingBills}
-              icon={CreditCard}
-            />
+            {isLoading ? (
+              [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+            ) : (
+              <>
+                <StatCard
+                  title="Emergency Load"
+                  value={stats?.emergencyLoad || 0}
+                  icon={AlertTriangle}
+                  variant="critical"
+                />
+                <StatCard
+                  title="Pending Lab Tests"
+                  value={stats?.pendingLabTests || 0}
+                  icon={FlaskConical}
+                />
+                <StatCard
+                  title="Low Stock Items"
+                  value={stats?.lowStockMedicines || 0}
+                  icon={Package}
+                  variant="warning"
+                />
+                <StatCard
+                  title="Pending Bills"
+                  value={stats?.pendingBills || 0}
+                  icon={CreditCard}
+                />
+              </>
+            )}
           </div>
 
           {/* Tables */}
@@ -145,11 +179,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   View All
                 </Button>
               </div>
-              <DataTable
-                columns={appointmentColumns}
-                data={upcomingAppointments}
-                keyField="id"
-              />
+              {appointmentsLoading ? (
+                <Skeleton className="h-48 rounded-lg" />
+              ) : (
+                <DataTable
+                  columns={appointmentColumns}
+                  data={upcomingAppointments}
+                  keyField="id"
+                  emptyMessage="No appointments today"
+                />
+              )}
             </div>
 
             <div className="space-y-4">
@@ -159,36 +198,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   View All
                 </Button>
               </div>
-              <div className="space-y-3">
-                {alerts.filter(a => !a.acknowledged).slice(0, 4).map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`p-4 rounded-lg border ${
-                      alert.severity === 'critical' 
-                        ? 'bg-critical/5 border-critical/20' 
-                        : alert.severity === 'warning'
-                        ? 'bg-warning/5 border-warning/20'
-                        : 'bg-info/5 border-info/20'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className={`w-4 h-4 mt-0.5 ${
-                        alert.severity === 'critical' 
-                          ? 'text-critical' 
-                          : alert.severity === 'warning'
-                          ? 'text-warning'
-                          : 'text-info'
-                      }`} />
-                      <div className="flex-1">
-                        <p className="text-sm text-foreground">{alert.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(alert.createdAt).toLocaleTimeString()}
-                        </p>
-                      </div>
+              {alertsLoading ? (
+                <Skeleton className="h-48 rounded-lg" />
+              ) : (
+                <div className="space-y-3">
+                  {alerts.filter(a => !a.acknowledged).slice(0, 4).length === 0 ? (
+                    <div className="p-4 rounded-lg border border-border text-center text-muted-foreground">
+                      No active alerts
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    alerts.filter(a => !a.acknowledged).slice(0, 4).map((alert) => (
+                      <div
+                        key={alert.id}
+                        className={`p-4 rounded-lg border ${
+                          alert.severity === 'critical' 
+                            ? 'bg-critical/5 border-critical/20' 
+                            : alert.severity === 'warning'
+                            ? 'bg-warning/5 border-warning/20'
+                            : 'bg-info/5 border-info/20'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className={`w-4 h-4 mt-0.5 ${
+                            alert.severity === 'critical' 
+                              ? 'text-critical' 
+                              : alert.severity === 'warning'
+                              ? 'text-warning'
+                              : 'text-info'
+                          }`} />
+                          <div className="flex-1">
+                            <p className="text-sm text-foreground">{alert.message}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(alert.created_at).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>

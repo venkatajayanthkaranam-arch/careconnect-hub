@@ -2,7 +2,7 @@ import React from 'react';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { mockAdmissions, mockPatients } from '@/data/mockData';
+import { useAdmissions } from '@/hooks/useDashboardData';
 import { 
   Users, 
   Heart, 
@@ -21,15 +21,25 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { AdmissionWithDetails } from '@/hooks/useDashboardData';
 
 export const NurseDashboard: React.FC = () => {
-  const assignedPatients = mockAdmissions.filter(a => a.status === 'admitted');
+  const { data: admissions = [], isLoading } = useAdmissions('admitted');
 
   const patientColumns = [
-    { key: 'patientName', header: 'Patient' },
-    { key: 'wardType', header: 'Ward' },
-    { key: 'bedId', header: 'Bed' },
-    { key: 'type', header: 'Type', render: (item: typeof mockAdmissions[0]) => <StatusBadge status={item.type} /> },
+    { 
+      key: 'patientName', 
+      header: 'Patient',
+      render: (item: AdmissionWithDetails) => item.patients?.name || 'Unknown'
+    },
+    { key: 'ward_type', header: 'Ward' },
+    { 
+      key: 'bedId', 
+      header: 'Bed',
+      render: (item: AdmissionWithDetails) => item.beds?.bed_number || 'N/A'
+    },
+    { key: 'type', header: 'Type', render: (item: AdmissionWithDetails) => <StatusBadge status={item.type} /> },
     { 
       key: 'action', 
       header: 'Actions',
@@ -83,29 +93,35 @@ export const NurseDashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Assigned Patients"
-          value={assignedPatients.length}
-          icon={Users}
-          variant="medical"
-        />
-        <StatCard
-          title="Vitals Pending"
-          value={3}
-          icon={Heart}
-          variant="warning"
-        />
-        <StatCard
-          title="Medications Due"
-          value={5}
-          icon={Pill}
-          variant="critical"
-        />
-        <StatCard
-          title="Care Logs Today"
-          value={12}
-          icon={ClipboardList}
-        />
+        {isLoading ? (
+          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+        ) : (
+          <>
+            <StatCard
+              title="Assigned Patients"
+              value={admissions.length}
+              icon={Users}
+              variant="medical"
+            />
+            <StatCard
+              title="Vitals Pending"
+              value={3}
+              icon={Heart}
+              variant="warning"
+            />
+            <StatCard
+              title="Medications Due"
+              value={5}
+              icon={Pill}
+              variant="critical"
+            />
+            <StatCard
+              title="Care Logs Today"
+              value={12}
+              icon={ClipboardList}
+            />
+          </>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -127,11 +143,16 @@ export const NurseDashboard: React.FC = () => {
       {/* Patients Table */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Assigned Patients</h2>
-        <DataTable
-          columns={patientColumns}
-          data={assignedPatients}
-          keyField="id"
-        />
+        {isLoading ? (
+          <Skeleton className="h-64 rounded-lg" />
+        ) : (
+          <DataTable
+            columns={patientColumns}
+            data={admissions}
+            keyField="id"
+            emptyMessage="No admitted patients"
+          />
+        )}
       </div>
 
       {/* Upcoming Medications */}

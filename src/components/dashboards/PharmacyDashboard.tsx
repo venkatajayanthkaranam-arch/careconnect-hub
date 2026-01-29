@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { mockPrescriptions, mockMedicines } from '@/data/mockData';
+import { usePrescriptions, useMedicines } from '@/hooks/useDashboardData';
 import { 
   Pill, 
   ClipboardList, 
@@ -20,32 +20,48 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import type { Prescription, Medicine } from '@/types/hospital';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { PrescriptionWithDetails } from '@/hooks/useDashboardData';
+import type { Database } from '@/integrations/supabase/types';
+
+type Medicine = Database['public']['Tables']['medicines']['Row'];
 
 export const PharmacyDashboard: React.FC = () => {
-  const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
-  const prescriptions = mockPrescriptions;
+  const [selectedPrescription, setSelectedPrescription] = useState<PrescriptionWithDetails | null>(null);
+  
+  const { data: prescriptions = [], isLoading: prescriptionsLoading } = usePrescriptions();
+  const { data: medicines = [], isLoading: medicinesLoading } = useMedicines();
+
   const pendingPrescriptions = prescriptions.filter(p => p.status === 'pending');
-  const lowStockMedicines = mockMedicines.filter(m => m.stock <= m.reorderLevel);
-  const expiringMedicines = mockMedicines.filter(m => {
-    const daysUntilExpiry = Math.ceil((m.expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const lowStockMedicines = medicines.filter(m => m.stock <= m.reorder_level);
+  const expiringMedicines = medicines.filter(m => {
+    if (!m.expiry_date) return false;
+    const daysUntilExpiry = Math.ceil((new Date(m.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     return daysUntilExpiry <= 90;
   });
 
   const prescriptionColumns = [
-    { key: 'patientName', header: 'Patient' },
-    { key: 'doctorName', header: 'Doctor' },
-    { key: 'type', header: 'Type', render: (item: Prescription) => <StatusBadge status={item.type} /> },
+    { 
+      key: 'patientName', 
+      header: 'Patient',
+      render: (item: PrescriptionWithDetails) => item.patients?.name || 'Unknown'
+    },
+    { 
+      key: 'doctorName', 
+      header: 'Doctor',
+      render: (item: PrescriptionWithDetails) => item.doctors?.name || 'Unknown'
+    },
+    { key: 'type', header: 'Type', render: (item: PrescriptionWithDetails) => <StatusBadge status={item.type} /> },
     { 
       key: 'medicines', 
       header: 'Items',
-      render: (item: Prescription) => <span>{item.medicines.length} items</span>
+      render: (item: PrescriptionWithDetails) => <span>{item.prescription_items?.length || 0} items</span>
     },
-    { key: 'status', header: 'Status', render: (item: Prescription) => <StatusBadge status={item.status} /> },
+    { key: 'status', header: 'Status', render: (item: PrescriptionWithDetails) => <StatusBadge status={item.status} /> },
     { 
       key: 'action', 
       header: 'Action',
-      render: (item: Prescription) => (
+      render: (item: PrescriptionWithDetails) => (
         <Button 
           size="sm" 
           variant={item.status === 'pending' ? 'medical' : 'outline'}
@@ -66,7 +82,7 @@ export const PharmacyDashboard: React.FC = () => {
       key: 'stock', 
       header: 'Stock',
       render: (item: Medicine) => (
-        <span className={item.stock <= item.reorderLevel ? 'text-critical font-medium' : ''}>
+        <span className={item.stock <= item.reorder_level ? 'text-critical font-medium' : ''}>
           {item.stock}
         </span>
       )
@@ -75,10 +91,11 @@ export const PharmacyDashboard: React.FC = () => {
       key: 'expiryDate', 
       header: 'Expiry',
       render: (item: Medicine) => {
-        const daysUntilExpiry = Math.ceil((item.expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (!item.expiry_date) return '-';
+        const daysUntilExpiry = Math.ceil((new Date(item.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
         return (
           <span className={daysUntilExpiry <= 90 ? 'text-warning font-medium' : ''}>
-            {item.expiryDate.toLocaleDateString()}
+            {new Date(item.expiry_date).toLocaleDateString()}
           </span>
         );
       }
@@ -89,6 +106,8 @@ export const PharmacyDashboard: React.FC = () => {
     toast.success('Medicines issued successfully');
     setSelectedPrescription(null);
   };
+
+  const isLoading = prescriptionsLoading || medicinesLoading;
 
   return (
     <div className="space-y-6 animate-slide-up">
@@ -101,30 +120,36 @@ export const PharmacyDashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Pending Prescriptions"
-          value={pendingPrescriptions.length}
-          icon={ClipboardList}
-          variant="medical"
-        />
-        <StatCard
-          title="Issued Today"
-          value={prescriptions.filter(p => p.status === 'issued').length}
-          icon={Pill}
-          variant="success"
-        />
-        <StatCard
-          title="Low Stock Items"
-          value={lowStockMedicines.length}
-          icon={Package}
-          variant="warning"
-        />
-        <StatCard
-          title="Expiring Soon"
-          value={expiringMedicines.length}
-          icon={AlertTriangle}
-          variant="critical"
-        />
+        {isLoading ? (
+          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+        ) : (
+          <>
+            <StatCard
+              title="Pending Prescriptions"
+              value={pendingPrescriptions.length}
+              icon={ClipboardList}
+              variant="medical"
+            />
+            <StatCard
+              title="Issued Today"
+              value={prescriptions.filter(p => p.status === 'issued').length}
+              icon={Pill}
+              variant="success"
+            />
+            <StatCard
+              title="Low Stock Items"
+              value={lowStockMedicines.length}
+              icon={Package}
+              variant="warning"
+            />
+            <StatCard
+              title="Expiring Soon"
+              value={expiringMedicines.length}
+              icon={AlertTriangle}
+              variant="critical"
+            />
+          </>
+        )}
       </div>
 
       {/* Alerts */}
@@ -137,7 +162,7 @@ export const PharmacyDashboard: React.FC = () => {
                 <span className="font-medium text-warning">Low Stock Alert</span>
               </div>
               <ul className="text-sm space-y-1">
-                {lowStockMedicines.map(m => (
+                {lowStockMedicines.slice(0, 5).map(m => (
                   <li key={m.id}>{m.name} - {m.stock} units remaining</li>
                 ))}
               </ul>
@@ -150,8 +175,8 @@ export const PharmacyDashboard: React.FC = () => {
                 <span className="font-medium text-critical">Expiry Alert</span>
               </div>
               <ul className="text-sm space-y-1">
-                {expiringMedicines.map(m => (
-                  <li key={m.id}>{m.name} - Expires {m.expiryDate.toLocaleDateString()}</li>
+                {expiringMedicines.slice(0, 5).map(m => (
+                  <li key={m.id}>{m.name} - Expires {m.expiry_date && new Date(m.expiry_date).toLocaleDateString()}</li>
                 ))}
               </ul>
             </div>
@@ -163,20 +188,30 @@ export const PharmacyDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Pending Prescriptions</h2>
-          <DataTable
-            columns={prescriptionColumns}
-            data={prescriptions}
-            keyField="id"
-          />
+          {prescriptionsLoading ? (
+            <Skeleton className="h-64 rounded-lg" />
+          ) : (
+            <DataTable
+              columns={prescriptionColumns}
+              data={prescriptions}
+              keyField="id"
+              emptyMessage="No prescriptions found"
+            />
+          )}
         </div>
 
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Inventory</h2>
-          <DataTable
-            columns={inventoryColumns}
-            data={mockMedicines}
-            keyField="id"
-          />
+          {medicinesLoading ? (
+            <Skeleton className="h-64 rounded-lg" />
+          ) : (
+            <DataTable
+              columns={inventoryColumns}
+              data={medicines}
+              keyField="id"
+              emptyMessage="No medicines in inventory"
+            />
+          )}
         </div>
       </div>
 
@@ -191,21 +226,21 @@ export const PharmacyDashboard: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-muted-foreground">Patient</p>
-                  <p className="font-medium">{selectedPrescription?.patientName}</p>
+                  <p className="font-medium">{selectedPrescription?.patients?.name}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Doctor</p>
-                  <p className="font-medium">{selectedPrescription?.doctorName}</p>
+                  <p className="font-medium">{selectedPrescription?.doctors?.name}</p>
                 </div>
               </div>
             </div>
 
             <div className="space-y-3">
               <Label>Medicines to Issue</Label>
-              {selectedPrescription?.medicines.map((med, i) => (
-                <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+              {selectedPrescription?.prescription_items?.map((med) => (
+                <div key={med.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
-                    <p className="font-medium">{med.name}</p>
+                    <p className="font-medium">{med.medicine_name}</p>
                     <p className="text-sm text-muted-foreground">
                       {med.dosage} - Qty: {med.quantity}
                     </p>

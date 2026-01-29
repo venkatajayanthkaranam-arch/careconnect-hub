@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { mockAppointments, mockPatients } from '@/data/mockData';
+import { useTodayAppointments, usePatients } from '@/hooks/useDashboardData';
+import { departmentLabels } from '@/data/mockData';
 import { 
   UserPlus, 
   Calendar, 
@@ -28,23 +29,47 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import type { Appointment } from '@/types/hospital';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { AppointmentWithDetails } from '@/hooks/useDashboardData';
 
 export const ReceptionDashboard: React.FC = () => {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const todayAppointments = mockAppointments;
+  
+  const { data: todayAppointments = [], isLoading: appointmentsLoading } = useTodayAppointments();
+  const { data: patients = [], isLoading: patientsLoading } = usePatients();
+
   const waitingCount = todayAppointments.filter(a => a.status === 'waiting').length;
+  const todayNewPatients = patients.filter(p => {
+    const today = new Date().toISOString().split('T')[0];
+    return p.created_at.startsWith(today);
+  }).length;
 
   const appointmentColumns = [
-    { key: 'patientName', header: 'Patient' },
-    { key: 'doctorName', header: 'Doctor' },
-    { key: 'time', header: 'Time' },
-    { key: 'type', header: 'Type', render: (item: Appointment) => <StatusBadge status={item.type} /> },
-    { key: 'status', header: 'Status', render: (item: Appointment) => <StatusBadge status={item.status} /> },
+    { 
+      key: 'patientName', 
+      header: 'Patient',
+      render: (item: AppointmentWithDetails) => item.patients?.name || 'Unknown'
+    },
+    { 
+      key: 'doctorName', 
+      header: 'Doctor',
+      render: (item: AppointmentWithDetails) => item.doctors?.name || 'Not Assigned'
+    },
+    { key: 'appointment_time', header: 'Time' },
+    { 
+      key: 'type', 
+      header: 'Type', 
+      render: (item: AppointmentWithDetails) => <StatusBadge status={item.type} /> 
+    },
+    { 
+      key: 'status', 
+      header: 'Status', 
+      render: (item: AppointmentWithDetails) => <StatusBadge status={item.status} /> 
+    },
     { 
       key: 'paymentStatus', 
       header: 'Payment',
-      render: (item: Appointment) => <StatusBadge status={item.paymentStatus} />
+      render: (item: AppointmentWithDetails) => <StatusBadge status={item.payment_status} />
     },
   ];
 
@@ -53,6 +78,8 @@ export const ReceptionDashboard: React.FC = () => {
     toast.success('Patient registered successfully');
     setIsRegisterOpen(false);
   };
+
+  const isLoading = appointmentsLoading || patientsLoading;
 
   return (
     <div className="space-y-6 animate-slide-up">
@@ -126,29 +153,39 @@ export const ReceptionDashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Today's Appointments"
-          value={todayAppointments.length}
-          icon={Calendar}
-          variant="medical"
-        />
-        <StatCard
-          title="Waiting Patients"
-          value={waitingCount}
-          icon={Clock}
-          variant="warning"
-        />
-        <StatCard
-          title="Total Patients"
-          value={mockPatients.length}
-          icon={Users}
-        />
-        <StatCard
-          title="New Today"
-          value={2}
-          icon={UserPlus}
-          variant="success"
-        />
+        {isLoading ? (
+          <>
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-24 rounded-lg" />
+            ))}
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Today's Appointments"
+              value={todayAppointments.length}
+              icon={Calendar}
+              variant="medical"
+            />
+            <StatCard
+              title="Waiting Patients"
+              value={waitingCount}
+              icon={Clock}
+              variant="warning"
+            />
+            <StatCard
+              title="Total Patients"
+              value={patients.length}
+              icon={Users}
+            />
+            <StatCard
+              title="New Today"
+              value={todayNewPatients}
+              icon={UserPlus}
+              variant="success"
+            />
+          </>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -166,11 +203,16 @@ export const ReceptionDashboard: React.FC = () => {
       {/* Appointments Table */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Today's Appointments</h2>
-        <DataTable
-          columns={appointmentColumns}
-          data={todayAppointments}
-          keyField="id"
-        />
+        {appointmentsLoading ? (
+          <Skeleton className="h-64 rounded-lg" />
+        ) : (
+          <DataTable
+            columns={appointmentColumns}
+            data={todayAppointments}
+            keyField="id"
+            emptyMessage="No appointments scheduled for today"
+          />
+        )}
       </div>
     </div>
   );

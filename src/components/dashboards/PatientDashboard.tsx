@@ -3,7 +3,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { mockAppointments, mockBills, departmentLabels } from '@/data/mockData';
+import { useAppointments, useBills } from '@/hooks/useDashboardData';
+import { departmentLabels } from '@/data/mockData';
 import { 
   Calendar, 
   CreditCard, 
@@ -14,8 +15,9 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import type { Appointment, Bill } from '@/types/hospital';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AppointmentBooking } from '@/components/patient/AppointmentBooking';
+import type { AppointmentWithDetails, BillWithDetails } from '@/hooks/useDashboardData';
 
 export const PatientDashboard: React.FC = () => {
   const { patientRecord, profile } = useAuth();
@@ -24,37 +26,37 @@ export const PatientDashboard: React.FC = () => {
   const patientId = patientRecord?.id || '';
   const patientName = profile?.name || patientRecord?.name || 'Patient';
 
-  // Filter appointments and bills for this patient
-  const myAppointments = mockAppointments.filter(
-    a => a.patientId === patientId
-  );
-  const myBills = mockBills.filter(
-    b => b.patientId === patientId
-  );
+  // Fetch real data from Supabase
+  const { data: appointments = [], isLoading: appointmentsLoading } = useAppointments(patientId);
+  const { data: bills = [], isLoading: billsLoading } = useBills(patientId);
 
-  const upcomingAppointments = myAppointments.filter(
+  const upcomingAppointments = appointments.filter(
     a => a.status === 'scheduled' || a.status === 'waiting'
   );
-  const pendingBills = myBills.filter(b => b.status === 'pending' || b.status === 'partial');
-  const totalPending = pendingBills.reduce((sum, b) => sum + (b.totalAmount - b.paidAmount), 0);
+  const pendingBills = bills.filter(b => b.status === 'pending' || b.status === 'partial');
+  const totalPending = pendingBills.reduce((sum, b) => sum + (Number(b.total_amount) - Number(b.paid_amount)), 0);
 
   const appointmentColumns = [
     { 
       key: 'date', 
       header: 'Date',
-      render: (item: Appointment) => format(new Date(item.date), 'MMM dd, yyyy')
+      render: (item: AppointmentWithDetails) => format(new Date(item.appointment_date), 'MMM dd, yyyy')
     },
-    { key: 'time', header: 'Time' },
-    { key: 'doctorName', header: 'Doctor' },
+    { key: 'appointment_time', header: 'Time' },
+    { 
+      key: 'doctorName', 
+      header: 'Doctor',
+      render: (item: AppointmentWithDetails) => item.doctors?.name || 'Not Assigned'
+    },
     { 
       key: 'department', 
       header: 'Department',
-      render: (item: Appointment) => departmentLabels[item.department]
+      render: (item: AppointmentWithDetails) => departmentLabels[item.department]
     },
     { 
       key: 'status', 
       header: 'Status', 
-      render: (item: Appointment) => <StatusBadge status={item.status} /> 
+      render: (item: AppointmentWithDetails) => <StatusBadge status={item.status} /> 
     },
   ];
 
@@ -62,30 +64,32 @@ export const PatientDashboard: React.FC = () => {
     { 
       key: 'createdAt', 
       header: 'Date',
-      render: (item: Bill) => format(new Date(item.createdAt), 'MMM dd, yyyy')
+      render: (item: BillWithDetails) => format(new Date(item.created_at), 'MMM dd, yyyy')
     },
-    { key: 'id', header: 'Bill ID' },
-    { key: 'type', header: 'Type', render: (item: Bill) => item.type.toUpperCase() },
+    { key: 'id', header: 'Bill ID', render: (item: BillWithDetails) => item.id.slice(0, 8) },
+    { key: 'type', header: 'Type', render: (item: BillWithDetails) => item.type.toUpperCase() },
     { 
       key: 'totalAmount', 
       header: 'Amount',
-      render: (item: Bill) => `₹${item.totalAmount.toLocaleString()}`
+      render: (item: BillWithDetails) => `₹${Number(item.total_amount).toLocaleString()}`
     },
     { 
       key: 'paidAmount', 
       header: 'Paid',
-      render: (item: Bill) => `₹${item.paidAmount.toLocaleString()}`
+      render: (item: BillWithDetails) => `₹${Number(item.paid_amount).toLocaleString()}`
     },
     { 
       key: 'status', 
       header: 'Status', 
-      render: (item: Bill) => <StatusBadge status={item.status} /> 
+      render: (item: BillWithDetails) => <StatusBadge status={item.status} /> 
     },
   ];
 
   if (showBooking) {
     return <AppointmentBooking onBack={() => setShowBooking(false)} />;
   }
+
+  const isLoading = appointmentsLoading || billsLoading;
 
   return (
     <div className="space-y-6">
@@ -101,7 +105,7 @@ export const PatientDashboard: React.FC = () => {
             </p>
             <div className="flex items-center gap-2 mt-3 text-sm">
               <span className="bg-primary/20 text-primary px-3 py-1 rounded-full font-medium">
-                Patient ID: {patientId}
+                Patient ID: {patientId || 'Not Assigned'}
               </span>
             </div>
           </div>
@@ -114,29 +118,35 @@ export const PatientDashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Upcoming Appointments"
-          value={upcomingAppointments.length}
-          icon={Calendar}
-          variant="medical"
-        />
-        <StatCard
-          title="Total Appointments"
-          value={myAppointments.length}
-          icon={Clock}
-        />
-        <StatCard
-          title="Pending Bills"
-          value={pendingBills.length}
-          icon={FileText}
-          variant={pendingBills.length > 0 ? 'warning' : 'success'}
-        />
-        <StatCard
-          title="Amount Due"
-          value={`₹${totalPending.toLocaleString()}`}
-          icon={CreditCard}
-          variant={totalPending > 0 ? 'critical' : 'success'}
-        />
+        {isLoading ? (
+          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+        ) : (
+          <>
+            <StatCard
+              title="Upcoming Appointments"
+              value={upcomingAppointments.length}
+              icon={Calendar}
+              variant="medical"
+            />
+            <StatCard
+              title="Total Appointments"
+              value={appointments.length}
+              icon={Clock}
+            />
+            <StatCard
+              title="Pending Bills"
+              value={pendingBills.length}
+              icon={FileText}
+              variant={pendingBills.length > 0 ? 'warning' : 'success'}
+            />
+            <StatCard
+              title="Amount Due"
+              value={`₹${totalPending.toLocaleString()}`}
+              icon={CreditCard}
+              variant={totalPending > 0 ? 'critical' : 'success'}
+            />
+          </>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -164,10 +174,12 @@ export const PatientDashboard: React.FC = () => {
               View All
             </Button>
           </div>
-          {myAppointments.length > 0 ? (
+          {appointmentsLoading ? (
+            <Skeleton className="h-48 rounded-lg" />
+          ) : appointments.length > 0 ? (
             <DataTable
               columns={appointmentColumns}
-              data={myAppointments.slice(0, 5)}
+              data={appointments.slice(0, 5)}
               keyField="id"
             />
           ) : (
@@ -193,10 +205,12 @@ export const PatientDashboard: React.FC = () => {
               View All
             </Button>
           </div>
-          {myBills.length > 0 ? (
+          {billsLoading ? (
+            <Skeleton className="h-48 rounded-lg" />
+          ) : bills.length > 0 ? (
             <DataTable
               columns={billColumns}
-              data={myBills.slice(0, 5)}
+              data={bills.slice(0, 5)}
               keyField="id"
             />
           ) : (

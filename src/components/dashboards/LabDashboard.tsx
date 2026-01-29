@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { mockLabTests } from '@/data/mockData';
+import { useLabTests } from '@/hooks/useDashboardData';
 import { 
   FlaskConical, 
   Clock, 
@@ -28,36 +28,47 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import type { LabTest } from '@/types/hospital';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { LabTestWithDetails } from '@/hooks/useDashboardData';
 
 export const LabDashboard: React.FC = () => {
-  const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
-  const labTests = mockLabTests;
-  const pendingTests = labTests.filter(t => t.sampleStatus === 'pending');
-  const processingTests = labTests.filter(t => t.sampleStatus === 'processing' || t.sampleStatus === 'collected');
-  const completedTests = labTests.filter(t => t.sampleStatus === 'completed');
+  const [selectedTest, setSelectedTest] = useState<LabTestWithDetails | null>(null);
+  
+  const { data: labTests = [], isLoading } = useLabTests();
+  
+  const pendingTests = labTests.filter(t => t.sample_status === 'pending');
+  const processingTests = labTests.filter(t => t.sample_status === 'processing' || t.sample_status === 'collected');
+  const completedTests = labTests.filter(t => t.sample_status === 'completed');
 
   const testColumns = [
-    { key: 'patientName', header: 'Patient' },
-    { key: 'testName', header: 'Test Name' },
-    { key: 'orderedBy', header: 'Ordered By' },
+    { 
+      key: 'patientName', 
+      header: 'Patient',
+      render: (item: LabTestWithDetails) => item.patients?.name || 'Unknown'
+    },
+    { key: 'test_name', header: 'Test Name' },
+    { 
+      key: 'orderedBy', 
+      header: 'Ordered By',
+      render: (item: LabTestWithDetails) => item.doctors?.name || 'Unknown'
+    },
     { 
       key: 'sampleStatus', 
       header: 'Status',
-      render: (item: LabTest) => <StatusBadge status={item.sampleStatus} />
+      render: (item: LabTestWithDetails) => <StatusBadge status={item.sample_status} />
     },
     { 
       key: 'action', 
       header: 'Action',
-      render: (item: LabTest) => (
+      render: (item: LabTestWithDetails) => (
         <Button 
           size="sm" 
-          variant={item.sampleStatus === 'processing' ? 'medical' : 'outline'}
+          variant={item.sample_status === 'processing' ? 'medical' : 'outline'}
           onClick={() => setSelectedTest(item)}
         >
-          {item.sampleStatus === 'pending' ? 'Collect Sample' : 
-           item.sampleStatus === 'collected' ? 'Process' :
-           item.sampleStatus === 'processing' ? 'Enter Result' : 'View'}
+          {item.sample_status === 'pending' ? 'Collect Sample' : 
+           item.sample_status === 'collected' ? 'Process' :
+           item.sample_status === 'processing' ? 'Enter Result' : 'View'}
         </Button>
       )
     },
@@ -79,30 +90,36 @@ export const LabDashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Pending Collection"
-          value={pendingTests.length}
-          icon={Clock}
-          variant="warning"
-        />
-        <StatCard
-          title="Processing"
-          value={processingTests.length}
-          icon={FlaskConical}
-          variant="medical"
-        />
-        <StatCard
-          title="Completed Today"
-          value={completedTests.length}
-          icon={CheckCircle}
-          variant="success"
-        />
-        <StatCard
-          title="Abnormal Results"
-          value={completedTests.filter(t => t.isAbnormal).length}
-          icon={AlertCircle}
-          variant="critical"
-        />
+        {isLoading ? (
+          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+        ) : (
+          <>
+            <StatCard
+              title="Pending Collection"
+              value={pendingTests.length}
+              icon={Clock}
+              variant="warning"
+            />
+            <StatCard
+              title="Processing"
+              value={processingTests.length}
+              icon={FlaskConical}
+              variant="medical"
+            />
+            <StatCard
+              title="Completed Today"
+              value={completedTests.length}
+              icon={CheckCircle}
+              variant="success"
+            />
+            <StatCard
+              title="Abnormal Results"
+              value={completedTests.filter(t => t.is_abnormal).length}
+              icon={AlertCircle}
+              variant="critical"
+            />
+          </>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -120,11 +137,16 @@ export const LabDashboard: React.FC = () => {
       {/* Tests Table */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">All Lab Tests</h2>
-        <DataTable
-          columns={testColumns}
-          data={labTests}
-          keyField="id"
-        />
+        {isLoading ? (
+          <Skeleton className="h-64 rounded-lg" />
+        ) : (
+          <DataTable
+            columns={testColumns}
+            data={labTests}
+            keyField="id"
+            emptyMessage="No lab tests found"
+          />
+        )}
       </div>
 
       {/* Result Entry Dialog */}
@@ -138,18 +160,18 @@ export const LabDashboard: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-muted-foreground">Patient</p>
-                  <p className="font-medium">{selectedTest?.patientName}</p>
+                  <p className="font-medium">{selectedTest?.patients?.name}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Test</p>
-                  <p className="font-medium">{selectedTest?.testName}</p>
+                  <p className="font-medium">{selectedTest?.test_name}</p>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label>Sample Status</Label>
-              <Select defaultValue={selectedTest?.sampleStatus}>
+              <Select defaultValue={selectedTest?.sample_status}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -169,7 +191,7 @@ export const LabDashboard: React.FC = () => {
 
             <div className="space-y-2">
               <Label>Normal Range</Label>
-              <Input placeholder="e.g., 70-100 mg/dL" defaultValue={selectedTest?.normalRange} />
+              <Input placeholder="e.g., 70-100 mg/dL" defaultValue={selectedTest?.normal_range || ''} />
             </div>
 
             <div className="space-y-2">
