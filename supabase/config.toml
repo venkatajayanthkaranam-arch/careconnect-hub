@@ -2,3 +2,6 @@ project_id = "tjajdwylbrewvhjaqmsp"
 
 [functions.book-appointment]
 verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
