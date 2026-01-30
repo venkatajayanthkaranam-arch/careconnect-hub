@@ -5,7 +5,23 @@ import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AddEmployeeDialog } from './AddEmployeeDialog';
 import { useToast } from '@/hooks/use-toast';
-import { UserPlus, RefreshCw, Users } from 'lucide-react';
+import { UserPlus, RefreshCw, Users, Trash2, UserX, UserCheck } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Database } from '@/integrations/supabase/types';
 
 type EmployeeRole = Database['public']['Enums']['employee_role'];
@@ -31,6 +47,10 @@ export const EmployeeManagement: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [deleteType, setDeleteType] = useState<'temporary' | 'permanent'>('temporary');
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchEmployees = async () => {
@@ -91,12 +111,71 @@ export const EmployeeManagement: React.FC = () => {
       });
       
       fetchEmployees();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       toast({
         title: 'Error',
-        description: error.message,
+        description: errorMessage,
         variant: 'destructive',
       });
+    }
+  };
+
+  const openDeleteDialog = (employee: Employee, type: 'temporary' | 'permanent') => {
+    setSelectedEmployee(employee);
+    setDeleteType(type);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedEmployee) return;
+    
+    setDeleteLoading(true);
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+          body: JSON.stringify({
+            userId: selectedEmployee.user_id,
+            deleteType: deleteType,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
+      }
+
+      toast({
+        title: 'Success',
+        description: result.message,
+      });
+
+      setDeleteDialogOpen(false);
+      setSelectedEmployee(null);
+      fetchEmployees();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -166,16 +245,49 @@ export const EmployeeManagement: React.FC = () => {
       key: 'actions', 
       header: 'Actions',
       render: (item: Employee) => (
-        <Button 
-          variant={item.is_active ? 'outline' : 'default'}
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleToggleActive(item);
-          }}
-        >
-          {item.is_active ? 'Deactivate' : 'Activate'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant={item.is_active ? 'outline' : 'default'}
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleActive(item);
+            }}
+          >
+            {item.is_active ? <UserX className="w-4 h-4 mr-1" /> : <UserCheck className="w-4 h-4 mr-1" />}
+            {item.is_active ? 'Deactivate' : 'Activate'}
+          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="destructive" size="sm" onClick={(e) => e.stopPropagation()}>
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDeleteDialog(item, 'temporary');
+                }}
+                className="text-warning"
+              >
+                <UserX className="w-4 h-4 mr-2" />
+                Temporary Delete (Deactivate)
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDeleteDialog(item, 'permanent');
+                }}
+                className="text-destructive"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Permanent Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       )
     },
   ];
@@ -221,6 +333,42 @@ export const EmployeeManagement: React.FC = () => {
           setDialogOpen(false);
         }}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteType === 'permanent' ? 'Permanently Delete Employee?' : 'Temporarily Delete Employee?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteType === 'permanent' ? (
+                <>
+                  <span className="text-destructive font-semibold">Warning: This action cannot be undone!</span>
+                  <br /><br />
+                  This will permanently remove <strong>{selectedEmployee?.profile?.name || 'this employee'}</strong> ({selectedEmployee?.profile?.email}) from the system. 
+                  They will need to be re-registered to access the system again.
+                </>
+              ) : (
+                <>
+                  This will deactivate <strong>{selectedEmployee?.profile?.name || 'this employee'}</strong> ({selectedEmployee?.profile?.email}). 
+                  They won't be able to log in, but their data will be preserved and they can be reactivated later.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className={deleteType === 'permanent' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            >
+              {deleteLoading ? 'Processing...' : deleteType === 'permanent' ? 'Delete Permanently' : 'Deactivate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
+
