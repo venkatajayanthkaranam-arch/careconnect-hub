@@ -851,6 +851,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_admin_role: { Args: { admin_email: string }; Returns: undefined }
       generate_patient_id: { Args: never; Returns: string }
       get_patient_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
