@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   Package,
   BarChart3,
-  LogOut
+  LogOut,
+  Brain,
+  Video,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +36,7 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
   admin: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
     { icon: Users, label: 'User Management', path: 'users' },
+    { icon: Brain, label: 'AI Analytics', path: 'ai-analytics' },
     { icon: BarChart3, label: 'Reports & Analytics', path: 'reports' },
     { icon: Settings, label: 'Settings', path: 'settings' },
   ],
@@ -46,6 +49,7 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
   doctor: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
     { icon: Calendar, label: 'Appointments', path: 'appointments' },
+    { icon: Video, label: 'Telemedicine', path: 'telemedicine' },
     { icon: Stethoscope, label: 'Consultation', path: 'consultation' },
     { icon: FileText, label: 'Prescriptions', path: 'prescriptions' },
     { icon: FlaskConical, label: 'Lab Results', path: 'lab-results' },
@@ -65,6 +69,7 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
   ],
   pharmacist: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
+    { icon: Brain, label: 'AI Analytics', path: 'ai-analytics' },
     { icon: ClipboardList, label: 'Prescriptions', path: 'prescriptions' },
     { icon: Pill, label: 'Issue Medicines', path: 'issue' },
     { icon: Package, label: 'Inventory', path: 'inventory' },
@@ -80,6 +85,7 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
   patient: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
     { icon: Calendar, label: 'Appointments', path: 'appointments' },
+    { icon: Video, label: 'Telemedicine', path: 'telemedicine' },
     { icon: FlaskConical, label: 'Lab Results', path: 'lab-results' },
     { icon: CreditCard, label: 'Bills', path: 'bills' },
     { icon: FileText, label: 'Medical Records', path: 'records' },

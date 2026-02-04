@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { AIInsightsPanel } from '@/components/pharmacy/AIInsightsPanel';
 import { usePrescriptions, useMedicines } from '@/hooks/useDashboardData';
 import { 
   Pill, 
   ClipboardList, 
   Package, 
   AlertTriangle,
-  Check
+  Check,
+  Brain
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -184,34 +186,45 @@ export const PharmacyDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Pending Prescriptions</h2>
-          {prescriptionsLoading ? (
-            <Skeleton className="h-64 rounded-lg" />
-          ) : (
-            <DataTable
-              columns={prescriptionColumns}
-              data={prescriptions}
-              keyField="id"
-              emptyMessage="No prescriptions found"
-            />
-          )}
+      {/* Tables and AI Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold">Pending Prescriptions</h2>
+            {prescriptionsLoading ? (
+              <Skeleton className="h-64 rounded-lg" />
+            ) : (
+              <DataTable
+                columns={prescriptionColumns}
+                data={prescriptions}
+                keyField="id"
+                emptyMessage="No prescriptions found"
+              />
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold">Inventory</h2>
+            {medicinesLoading ? (
+              <Skeleton className="h-64 rounded-lg" />
+            ) : (
+              <DataTable
+                columns={inventoryColumns}
+                data={medicines}
+                keyField="id"
+                emptyMessage="No medicines in inventory"
+              />
+            )}
+          </div>
         </div>
 
+        {/* AI Insights Sidebar */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Inventory</h2>
-          {medicinesLoading ? (
-            <Skeleton className="h-64 rounded-lg" />
-          ) : (
-            <DataTable
-              columns={inventoryColumns}
-              data={medicines}
-              keyField="id"
-              emptyMessage="No medicines in inventory"
-            />
-          )}
+          <div className="flex items-center gap-2">
+            <Brain className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">AI Insights</h2>
+          </div>
+          <AIInsightsPanel compact />
         </div>
       </div>
 

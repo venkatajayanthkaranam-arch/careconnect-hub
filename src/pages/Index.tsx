@@ -11,6 +11,8 @@ import { PharmacyDashboard } from '@/components/dashboards/PharmacyDashboard';
 import { BillingDashboard } from '@/components/dashboards/BillingDashboard';
 import { PatientDashboard } from '@/components/dashboards/PatientDashboard';
 import { IPManagement } from '@/components/modules/IPManagement';
+import { AIAnalyticsPage } from '@/pages/AIAnalyticsPage';
+import { TelemedicinePage } from '@/pages/TelemedicinePage';
 import { Loader2 } from 'lucide-react';
 
 const DashboardRouter: React.FC = () => {
@@ -35,9 +37,14 @@ const DashboardRouter: React.FC = () => {
 
   // Patient users get their own simplified layout
   if (isPatient) {
+    const renderPatientPage = () => {
+      if (currentPage === 'telemedicine') return <TelemedicinePage />;
+      return <PatientDashboard />;
+    };
+    
     return (
       <DashboardLayout currentPage={currentPage} onNavigate={setCurrentPage}>
-        <PatientDashboard />
+        {renderPatientPage()}
       </DashboardLayout>
     );
   }
@@ -45,6 +52,10 @@ const DashboardRouter: React.FC = () => {
   // Employee dashboards
   if (isEmployee && employeeRole) {
     const renderDashboard = () => {
+      // Common pages accessible by multiple roles
+      if (currentPage === 'ai-analytics') return <AIAnalyticsPage />;
+      if (currentPage === 'telemedicine') return <TelemedicinePage />;
+      
       switch (employeeRole) {
         case 'admin':
           if (currentPage === 'users') return <div className="text-2xl font-bold">User Management</div>;
