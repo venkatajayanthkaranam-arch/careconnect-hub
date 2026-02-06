@@ -100,62 +100,43 @@ export const AddEmployeeDialog: React.FC<AddEmployeeDialogProps> = ({
     setLoading(true);
 
     try {
-      // Create user account
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: {
-            name: formData.name,
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-employee`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
           },
-        },
-      });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user account');
-
-      const userId = authData.user.id;
-
-      // Generate employee ID
-      const employeeId = `HMS-EMP-${Date.now().toString().slice(-6)}`;
-
-      // Create user role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: userId,
-          role: formData.role as EmployeeRole,
-          department: formData.department ? (formData.department as Department) : null,
-          specialization: formData.specialization || null,
-          employee_id: employeeId,
-          is_active: true,
-        });
-
-      if (roleError) throw roleError;
-
-      // If doctor, also add to doctors table
-      if (formData.role === 'doctor' && formData.department) {
-        const { error: doctorError } = await supabase
-          .from('doctors')
-          .insert({
-            user_id: userId,
+          body: JSON.stringify({
             name: formData.name,
-            department: formData.department as Department,
-            specialization: formData.specialization || formData.department.replace(/_/g, ' '),
-            consultation_fee: parseFloat(formData.consultationFee) || 500,
-            is_available: true,
-          });
+            email: formData.email,
+            password: formData.password,
+            phone: formData.phone,
+            role: formData.role,
+            department: formData.department || null,
+            specialization: formData.specialization || null,
+            consultationFee: formData.consultationFee,
+          }),
+        }
+      );
 
-        if (doctorError) throw doctorError;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create employee');
       }
 
       toast({
         title: 'Success',
-        description: `Employee account created successfully. Employee ID: ${employeeId}`,
+        description: result.message,
       });
 
-      // Reset form
       setFormData({
         name: '',
         email: '',
@@ -205,7 +186,6 @@ export const AddEmployeeDialog: React.FC<AddEmployeeDialogProps> = ({
                 required
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
               <Input
@@ -229,7 +209,6 @@ export const AddEmployeeDialog: React.FC<AddEmployeeDialogProps> = ({
                 required
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="password">Password *</Label>
               <Input
@@ -297,7 +276,6 @@ export const AddEmployeeDialog: React.FC<AddEmployeeDialogProps> = ({
                   placeholder="e.g., Cardiologist"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="consultationFee">Consultation Fee (₹)</Label>
                 <Input

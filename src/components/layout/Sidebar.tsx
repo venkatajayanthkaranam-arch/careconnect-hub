@@ -45,6 +45,7 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
     { icon: UserPlus, label: 'Patient Registration', path: 'registration' },
     { icon: Calendar, label: 'Appointments', path: 'appointments' },
     { icon: Bed, label: 'Bed Management', path: 'beds' },
+    { icon: Brain, label: 'AI Analytics', path: 'ai-analytics' },
   ],
   doctor: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
@@ -53,6 +54,7 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
     { icon: Stethoscope, label: 'Consultation', path: 'consultation' },
     { icon: FileText, label: 'Prescriptions', path: 'prescriptions' },
     { icon: FlaskConical, label: 'Lab Results', path: 'lab-results' },
+    { icon: Brain, label: 'AI Analytics', path: 'ai-analytics' },
   ],
   nurse: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
@@ -60,12 +62,14 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
     { icon: Heart, label: 'Vitals', path: 'vitals' },
     { icon: Pill, label: 'Medications', path: 'medications' },
     { icon: ClipboardList, label: 'Care Log', path: 'care-log' },
+    { icon: Brain, label: 'AI Analytics', path: 'ai-analytics' },
   ],
   lab_technician: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
     { icon: FlaskConical, label: 'Pending Tests', path: 'pending' },
     { icon: ClipboardList, label: 'Test Processing', path: 'processing' },
     { icon: FileText, label: 'Results', path: 'results' },
+    { icon: Brain, label: 'AI Analytics', path: 'ai-analytics' },
   ],
   pharmacist: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
@@ -81,6 +85,7 @@ const menusByRole: Record<EmployeeRole | 'patient', MenuItem[]> = {
     { icon: Bed, label: 'IP Bills', path: 'ip-bills' },
     { icon: FileText, label: 'Insurance', path: 'insurance' },
     { icon: ClipboardList, label: 'Discharge', path: 'discharge' },
+    { icon: Brain, label: 'AI Analytics', path: 'ai-analytics' },
   ],
   patient: [
     { icon: LayoutDashboard, label: 'Dashboard', path: 'dashboard' },
