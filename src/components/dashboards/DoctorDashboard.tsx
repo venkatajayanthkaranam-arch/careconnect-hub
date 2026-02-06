@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { StatCard } from '@/components/shared/StatCard';
 import { DataTable } from '@/components/shared/DataTable';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { PriorityAppointment } from '@/components/appointments/PriorityAppointment';
 import { useTodayAppointments, useLabTests } from '@/hooks/useDashboardData';
 import { departmentLabels } from '@/data/mockData';
 import { 
@@ -11,12 +12,15 @@ import {
   Stethoscope,
   FileText,
   FlaskConical,
-  AlertTriangle
+  AlertTriangle,
+  Brain,
+  LayoutDashboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -37,11 +41,7 @@ const RiskBadge: React.FC<{ level: RiskLevel }> = ({ level }) => {
     medium: 'bg-warning/10 text-warning border-warning/20',
     high: 'bg-critical/10 text-critical border-critical/20 animate-pulse',
   };
-  const icons = {
-    low: '🟢',
-    medium: '🟡',
-    high: '🔴',
-  };
+  const icons = { low: '🟢', medium: '🟡', high: '🔴' };
   
   return (
     <span className={cn(
@@ -59,7 +59,6 @@ export const DoctorDashboard: React.FC = () => {
   const { data: appointments = [], isLoading: appointmentsLoading } = useTodayAppointments();
   const { data: labTests = [], isLoading: labTestsLoading } = useLabTests();
 
-  // Sort appointments by risk level (high first) then by time
   const todayAppointments = useMemo(() => {
     const riskOrder: Record<RiskLevel, number> = { high: 0, medium: 1, low: 2 };
     return [...appointments].sort((a, b) => {
@@ -75,33 +74,16 @@ export const DoctorDashboard: React.FC = () => {
   const completedLabTests = labTests.filter(t => t.sample_status === 'completed');
 
   const appointmentColumns = [
-    { 
-      key: 'riskLevel', 
-      header: 'Priority',
-      render: (item: AppointmentWithDetails) => <RiskBadge level={item.risk_level} />
-    },
+    { key: 'riskLevel', header: 'Priority', render: (item: AppointmentWithDetails) => <RiskBadge level={item.risk_level} /> },
     { key: 'appointment_time', header: 'Time' },
-    { 
-      key: 'patientName', 
-      header: 'Patient',
-      render: (item: AppointmentWithDetails) => item.patients?.name || 'Unknown'
-    },
-    { 
-      key: 'department', 
-      header: 'Dept',
-      render: (item: AppointmentWithDetails) => departmentLabels[item.department]
-    },
+    { key: 'patientName', header: 'Patient', render: (item: AppointmentWithDetails) => item.patients?.name || 'Unknown' },
+    { key: 'department', header: 'Dept', render: (item: AppointmentWithDetails) => departmentLabels[item.department] },
     { key: 'type', header: 'Type', render: (item: AppointmentWithDetails) => <StatusBadge status={item.type} /> },
     { key: 'status', header: 'Status', render: (item: AppointmentWithDetails) => <StatusBadge status={item.status} /> },
     { 
-      key: 'action', 
-      header: 'Action',
+      key: 'action', header: 'Action',
       render: (item: AppointmentWithDetails) => (
-        <Button 
-          size="sm" 
-          variant={item.status === 'waiting' ? 'medical' : 'outline'}
-          onClick={() => setSelectedPatient(item)}
-        >
+        <Button size="sm" variant={item.status === 'waiting' ? 'medical' : 'outline'} onClick={() => setSelectedPatient(item)}>
           {item.status === 'waiting' ? 'Start' : 'View'}
         </Button>
       )
@@ -109,24 +91,11 @@ export const DoctorDashboard: React.FC = () => {
   ];
 
   const labResultColumns = [
-    { 
-      key: 'patientName', 
-      header: 'Patient',
-      render: (item: LabTestWithDetails) => item.patients?.name || 'Unknown'
-    },
+    { key: 'patientName', header: 'Patient', render: (item: LabTestWithDetails) => item.patients?.name || 'Unknown' },
     { key: 'test_name', header: 'Test' },
-    { 
-      key: 'sampleStatus', 
-      header: 'Status',
-      render: (item: LabTestWithDetails) => <StatusBadge status={item.sample_status} />
-    },
-    { 
-      key: 'result', 
-      header: 'Result',
-      render: (item: LabTestWithDetails) => (
-        <span className={item.is_abnormal ? 'text-critical font-medium' : ''}>
-          {item.result || '-'}
-        </span>
+    { key: 'sampleStatus', header: 'Status', render: (item: LabTestWithDetails) => <StatusBadge status={item.sample_status} /> },
+    { key: 'result', header: 'Result', render: (item: LabTestWithDetails) => (
+        <span className={item.is_abnormal ? 'text-critical font-medium' : ''}>{item.result || '-'}</span>
       )
     },
   ];
@@ -140,94 +109,63 @@ export const DoctorDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Doctor Dashboard</h1>
-          <p className="text-muted-foreground">Appointments sorted by risk priority</p>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        {isLoading ? (
-          [...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
-        ) : (
-          <>
-            <StatCard
-              title="High Risk Patients"
-              value={highRiskCount}
-              icon={AlertTriangle}
-              variant="critical"
-            />
-            <StatCard
-              title="Today's Appointments"
-              value={todayAppointments.length}
-              icon={Calendar}
-              variant="medical"
-            />
-            <StatCard
-              title="Waiting"
-              value={waitingPatients.length}
-              icon={Clock}
-              variant="warning"
-            />
-            <StatCard
-              title="In Consultation"
-              value={inProgress.length}
-              icon={Stethoscope}
-              variant="success"
-            />
-            <StatCard
-              title="Completed"
-              value={todayAppointments.filter(a => a.status === 'completed').length}
-              icon={Users}
-            />
-          </>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="flex gap-3">
-        <Button variant="quickAction">
-          <FileText className="w-4 h-4" />
-          New Prescription
-        </Button>
-        <Button variant="quickAction">
-          <FlaskConical className="w-4 h-4" />
-          Order Lab Test
-        </Button>
-      </div>
-
-      {/* Appointments Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Today's Schedule (Risk Prioritized)</h2>
-          {appointmentsLoading ? (
-            <Skeleton className="h-64 rounded-lg" />
-          ) : (
-            <DataTable
-              columns={appointmentColumns}
-              data={todayAppointments}
-              keyField="id"
-              emptyMessage="No appointments scheduled for today"
-            />
-          )}
+      <Tabs defaultValue="overview" className="w-full">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Doctor Dashboard</h1>
+            <p className="text-muted-foreground">Appointments sorted by risk priority</p>
+          </div>
+          <TabsList>
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <LayoutDashboard className="w-4 h-4" />Overview
+            </TabsTrigger>
+            <TabsTrigger value="priority-booking" className="flex items-center gap-2">
+              <Brain className="w-4 h-4" />AI Priority Triage
+            </TabsTrigger>
+          </TabsList>
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Lab Results</h2>
-          {labTestsLoading ? (
-            <Skeleton className="h-64 rounded-lg" />
-          ) : (
-            <DataTable
-              columns={labResultColumns}
-              data={completedLabTests.slice(0, 10)}
-              keyField="id"
-              emptyMessage="No completed lab results"
-            />
-          )}
-        </div>
-      </div>
+        <TabsContent value="overview" className="space-y-6">
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {isLoading ? (
+              [...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
+            ) : (
+              <>
+                <StatCard title="High Risk Patients" value={highRiskCount} icon={AlertTriangle} variant="critical" />
+                <StatCard title="Today's Appointments" value={todayAppointments.length} icon={Calendar} variant="medical" />
+                <StatCard title="Waiting" value={waitingPatients.length} icon={Clock} variant="warning" />
+                <StatCard title="In Consultation" value={inProgress.length} icon={Stethoscope} variant="success" />
+                <StatCard title="Completed" value={todayAppointments.filter(a => a.status === 'completed').length} icon={Users} />
+              </>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="quickAction"><FileText className="w-4 h-4" />New Prescription</Button>
+            <Button variant="quickAction"><FlaskConical className="w-4 h-4" />Order Lab Test</Button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">Today's Schedule (Risk Prioritized)</h2>
+              {appointmentsLoading ? <Skeleton className="h-64 rounded-lg" /> : (
+                <DataTable columns={appointmentColumns} data={todayAppointments} keyField="id" emptyMessage="No appointments scheduled for today" />
+              )}
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">Lab Results</h2>
+              {labTestsLoading ? <Skeleton className="h-64 rounded-lg" /> : (
+                <DataTable columns={labResultColumns} data={completedLabTests.slice(0, 10)} keyField="id" emptyMessage="No completed lab results" />
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="priority-booking">
+          <PriorityAppointment />
+        </TabsContent>
+      </Tabs>
 
       {/* Consultation Dialog */}
       <Dialog open={!!selectedPatient} onOpenChange={() => setSelectedPatient(null)}>
@@ -240,59 +178,31 @@ export const DoctorDashboard: React.FC = () => {
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
-              <div>
-                <p className="text-sm text-muted-foreground">Patient ID</p>
-                <p className="font-medium">{selectedPatient?.patient_id}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Department</p>
-                <p className="font-medium">{selectedPatient?.department && departmentLabels[selectedPatient.department]}</p>
-              </div>
+              <div><p className="text-sm text-muted-foreground">Patient ID</p><p className="font-medium">{selectedPatient?.patient_id}</p></div>
+              <div><p className="text-sm text-muted-foreground">Department</p><p className="font-medium">{selectedPatient?.department && departmentLabels[selectedPatient.department]}</p></div>
             </div>
 
             {selectedPatient?.symptoms && selectedPatient.symptoms.length > 0 && (
               <div className="p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground mb-2">Reported Symptoms</p>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {selectedPatient.symptoms.map(s => (
-                    <span key={s} className="bg-background px-2 py-1 rounded text-sm">{s}</span>
-                  ))}
+                  {selectedPatient.symptoms.map(s => <span key={s} className="bg-background px-2 py-1 rounded text-sm">{s}</span>)}
                 </div>
-                {selectedPatient.symptom_duration && (
-                  <p className="text-sm">Duration: {selectedPatient.symptom_duration}</p>
-                )}
-                {selectedPatient.additional_notes && (
-                  <p className="text-sm mt-1">{selectedPatient.additional_notes}</p>
-                )}
+                {selectedPatient.symptom_duration && <p className="text-sm">Duration: {selectedPatient.symptom_duration}</p>}
+                {selectedPatient.additional_notes && <p className="text-sm mt-1">{selectedPatient.additional_notes}</p>}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label>Diagnosis</Label>
-              <Textarea placeholder="Enter diagnosis notes..." rows={2} />
+            <div className="space-y-3">
+              <div><Label>Diagnosis</Label><Textarea placeholder="Enter diagnosis..." rows={2} className="mt-1" /></div>
+              <div><Label>Notes</Label><Textarea placeholder="Consultation notes..." rows={3} className="mt-1" /></div>
+              <div><Label>Follow-up Date</Label><Input type="date" className="mt-1" /></div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Prescription</Label>
-              <div className="border rounded-lg p-4 space-y-3">
-                <div className="grid grid-cols-4 gap-2">
-                  <Input placeholder="Medicine" />
-                  <Input placeholder="Dosage" />
-                  <Input placeholder="Qty" type="number" />
-                  <Input placeholder="Instructions" />
-                </div>
-                <Button variant="outline" size="sm">+ Add Medicine</Button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <Button variant="outline" className="flex-1">
-                <FlaskConical className="w-4 h-4 mr-2" />
-                Request Lab Test
-              </Button>
-              <Button variant="medical" className="flex-1" onClick={handleSaveConsultation}>
-                Save & Complete
-              </Button>
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" className="flex-1"><FlaskConical className="w-4 h-4 mr-2" />Order Lab Test</Button>
+              <Button variant="outline" className="flex-1"><FileText className="w-4 h-4 mr-2" />Write Prescription</Button>
+              <Button variant="medical" className="flex-1" onClick={handleSaveConsultation}>Save & Complete</Button>
             </div>
           </div>
         </DialogContent>
