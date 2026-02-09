@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.pharmacy-ai]
 verify_jwt = false
+
+[functions.process-payment]
+verify_jwt = false
+
+[functions.create-employee]
+verify_jwt = false

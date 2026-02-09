@@ -17,39 +17,24 @@ interface BookAppointmentRequest {
   symptom_severity?: string
   additional_notes?: string
   booking_type: 'user' | 'reception'
+  payment_mode?: 'cash' | 'card' | 'upi' | 'insurance' | 'online'
+  pay_now?: boolean
 }
 
-// Simple risk classification based on symptoms
 function classifyRisk(symptoms: string[] = [], severity?: string): 'low' | 'medium' | 'high' {
-  const highRiskSymptoms = ['chest pain', 'difficulty breathing', 'severe headache', 'loss of consciousness', 'high fever', 'bleeding'];
-  const mediumRiskSymptoms = ['persistent pain', 'dizziness', 'nausea', 'moderate fever', 'swelling'];
+  const highRiskSymptoms = ['chest pain', 'difficulty breathing', 'severe headache', 'loss of consciousness', 'high fever', 'bleeding', 'shortness of breath', 'fainting'];
+  const mediumRiskSymptoms = ['persistent pain', 'dizziness', 'nausea', 'moderate fever', 'swelling', 'persistent cough', 'abdominal pain'];
   
   const symptomsLower = symptoms.map(s => s.toLowerCase());
   
-  // Check for high risk symptoms
-  if (highRiskSymptoms.some(hs => symptomsLower.some(s => s.includes(hs)))) {
-    return 'high';
-  }
-  
-  // Check severity
-  if (severity === 'severe' || severity === 'critical') {
-    return 'high';
-  }
-  
-  // Check for medium risk symptoms
-  if (mediumRiskSymptoms.some(ms => symptomsLower.some(s => s.includes(ms)))) {
-    return 'medium';
-  }
-  
-  if (severity === 'moderate') {
-    return 'medium';
-  }
-  
+  if (highRiskSymptoms.some(hs => symptomsLower.some(s => s.includes(hs)))) return 'high';
+  if (severity === 'severe' || severity === 'critical' || severity === 'high') return 'high';
+  if (mediumRiskSymptoms.some(ms => symptomsLower.some(s => s.includes(ms)))) return 'medium';
+  if (severity === 'moderate' || severity === 'medium') return 'medium';
   return 'low';
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -67,12 +52,10 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
-    // Create client with user's auth for RLS
     const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     })
 
-    // Verify the user
     const token = authHeader.replace('Bearer ', '')
     const { data: claimsData, error: claimsError } = await supabaseUser.auth.getUser(token)
     if (claimsError || !claimsData?.user) {
@@ -82,9 +65,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Service role client for admin operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-
     const body: BookAppointmentRequest = await req.json()
 
     // Validate required fields
@@ -95,22 +76,31 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Classify risk level based on symptoms
+    // Classify risk
     const riskLevel = classifyRisk(body.symptoms, body.symptom_severity)
 
-    // Get consultation fee if doctor is specified
-    let consultationFee = 500 // Default fee
+    // Get consultation fee
+    let consultationFee = 500
+    let doctorName = ''
     if (body.doctor_id) {
       const { data: doctor } = await supabaseAdmin
         .from('doctors')
-        .select('consultation_fee')
+        .select('consultation_fee, name')
         .eq('id', body.doctor_id)
         .maybeSingle()
       
-      if (doctor?.consultation_fee) {
-        consultationFee = doctor.consultation_fee
+      if (doctor) {
+        if (doctor.consultation_fee) consultationFee = doctor.consultation_fee
+        doctorName = doctor.name || ''
       }
     }
+
+    // Get patient info for confirmation
+    const { data: patient } = await supabaseAdmin
+      .from('patients')
+      .select('name, email, phone')
+      .eq('id', body.patient_id)
+      .maybeSingle()
 
     // Create the appointment
     const { data: appointment, error: appointmentError } = await supabaseAdmin
@@ -142,7 +132,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Create automatic bill for the appointment
+    // Create bill
     const { data: bill, error: billError } = await supabaseAdmin
       .from('bills')
       .insert({
@@ -158,13 +148,11 @@ Deno.serve(async (req) => {
 
     if (billError) {
       console.error('Bill creation error:', billError)
-      // Don't fail the appointment if bill creation fails
-      // Just log the error
     }
 
-    // Create bill item for consultation fee
+    // Create bill item
     if (bill) {
-      const { error: billItemError } = await supabaseAdmin
+      await supabaseAdmin
         .from('bill_items')
         .insert({
           bill_id: bill.id,
@@ -175,20 +163,50 @@ Deno.serve(async (req) => {
           total: consultationFee,
         })
 
-      if (billItemError) {
-        console.error('Bill item creation error:', billItemError)
+      // Handle payment if pay_now is true
+      if (body.pay_now && body.payment_mode) {
+        const { error: payError } = await supabaseAdmin
+          .from('bills')
+          .update({
+            paid_amount: consultationFee,
+            status: 'paid',
+            payment_mode: body.payment_mode,
+            paid_at: new Date().toISOString(),
+          })
+          .eq('id', bill.id)
+
+        if (!payError) {
+          await supabaseAdmin
+            .from('appointments')
+            .update({ payment_status: 'paid' })
+            .eq('id', appointment.id)
+        }
       }
     }
 
-    // Create an alert for high-risk appointments
+    // Create alert for high-risk
     if (riskLevel === 'high') {
       await supabaseAdmin
         .from('alerts')
         .insert({
           type: 'emergency',
           severity: 'warning',
-          message: `High-risk appointment booked for patient ${body.patient_id}. Symptoms: ${body.symptoms?.join(', ') || 'Not specified'}`,
+          message: `High-risk appointment booked for ${patient?.name || body.patient_id}. Symptoms: ${body.symptoms?.join(', ') || 'Not specified'}`,
         })
+    }
+
+    // Build confirmation details
+    const confirmation = {
+      appointment_id: appointment.id,
+      patient_name: patient?.name || 'N/A',
+      patient_email: patient?.email || null,
+      doctor_name: doctorName ? `Dr. ${doctorName}` : 'To be assigned',
+      department: body.department,
+      date: body.appointment_date,
+      time: body.appointment_time,
+      risk_level: riskLevel,
+      consultation_fee: consultationFee,
+      payment_status: body.pay_now && body.payment_mode ? 'paid' : 'pending',
     }
 
     return new Response(
@@ -205,14 +223,15 @@ Deno.serve(async (req) => {
         },
         bill: bill ? {
           id: bill.id,
-          total_amount: bill.total_amount,
-          status: bill.status,
+          total_amount: consultationFee,
+          status: body.pay_now && body.payment_mode ? 'paid' : 'pending',
+          payment_mode: body.payment_mode || null,
         } : null,
+        confirmation,
         message: 'Appointment booked successfully',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-
   } catch (error: unknown) {
     console.error('Unexpected error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
