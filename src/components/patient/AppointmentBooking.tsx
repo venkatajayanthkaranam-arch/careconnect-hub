@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -49,6 +50,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBack }
   const { patientRecord } = useAuth();
   
   const [currentStep, setCurrentStep] = useState<BookingStep>('symptoms');
+  const [isBooking, setIsBooking] = useState(false);
   
   // Symptom form state
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
@@ -149,13 +151,60 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBack }
     }
   };
 
-  const handleBookAppointment = () => {
-    const riskLevel = calculateRiskLevel();
-    toast.success(
-      `Appointment booked successfully! Risk Level: ${riskLevel.toUpperCase()}`,
-      { description: `Your appointment is scheduled for ${format(selectedDate!, 'MMM dd, yyyy')} at ${selectedTime}` }
-    );
-    onBack();
+  const handleBookAppointment = async () => {
+    if (!patientRecord || !selectedDate || !selectedTime || !selectedDepartment) return;
+    
+    setIsBooking(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      
+      if (!token) {
+        toast.error('Please log in to book an appointment');
+        return;
+      }
+
+      const response = await supabase.functions.invoke('book-appointment', {
+        body: {
+          patient_id: patientRecord.id,
+          doctor_id: selectedDoctor?.id || undefined,
+          department: selectedDepartment,
+          appointment_date: format(selectedDate, 'yyyy-MM-dd'),
+          appointment_time: selectedTime,
+          type: 'op' as const,
+          symptoms: selectedSymptoms,
+          symptom_duration: duration,
+          symptom_severity: severity,
+          additional_notes: additionalNotes || undefined,
+          booking_type: 'user' as const,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to book appointment');
+      }
+
+      const result = response.data;
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to book appointment');
+      }
+
+      const conf = result.confirmation;
+      toast.success(
+        `Appointment booked successfully! Risk Level: ${conf.risk_level.toUpperCase()}`,
+        { 
+          description: `Scheduled for ${format(selectedDate, 'MMM dd, yyyy')} at ${selectedTime}. ${conf.payment_status === 'paid' ? 'Payment confirmed.' : `Consultation fee: ₹${conf.consultation_fee} (pending)`}`,
+          duration: 6000,
+        }
+      );
+      onBack();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to book appointment';
+      toast.error(message);
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   const riskLevel = calculateRiskLevel();
@@ -551,8 +600,8 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({ onBack }
           </Button>
           
           {currentStep === 'confirm' ? (
-            <Button variant="medical" onClick={handleBookAppointment}>
-              Confirm Booking
+            <Button variant="medical" onClick={handleBookAppointment} disabled={isBooking}>
+              {isBooking ? 'Booking...' : 'Confirm Booking'}
             </Button>
           ) : (
             <Button variant="medical" onClick={handleNextStep}>
